@@ -4,11 +4,12 @@ import webbrowser
 import re
 import time
 
-def getrows(parser):
-    return parser.find_all('tr', class_ = "success")
-
+# template urls
+searchurl = 'https://nyaa.si/user/HorribleSubs?f=0&c=0_0&q={}&o=desc&p={}'
+downloadurl = 'https://nyaa.si{}'
 quality = ["[480p]", "[720p]", "[1080p]"]
 
+# get user input
 anime = input("Enter anime name (as uploaded by HorribleSubs): ")
 
 while True:
@@ -27,39 +28,42 @@ print("Now enter the range of episodes you want to download. \nFor example to do
 minepisode = int(input("Enter the episode you want to start downloading from:\n"))
 maxepisode = int(input("Enter the episode you want to stop downloading at:\n"))
 
-# define number of pages to scrape
+# define number of pages to scrape: web page contains 25 distinct episodes (x3 qualities)
 n_pages = (maxepisode - minepisode)//25 + 1
 
-downloadurl = 'https://nyaa.si{}'
+# set quality to search
+q = quality[qselector]
 
 for p in range(1, n_pages+1):
 
-    url = 'https://nyaa.si/user/HorribleSubs?f=0&c=0_0&q='+anime+'&o=desc&p={}'.format(p)
+    url = searchurl.format(anime, p)
     html = requests.get(url).text
     parser=BeautifulSoup(html, "html.parser")
 
-    rows = getrows(parser)
+    rows = parser.find_all('tr', class_ = "success")
 
-    q = quality[qselector]
     for r in rows:
 
-        # find title
+        # find title element and check quality
         elements = r.find_all('a')
+        eptitle = None
         for elem in elements:
-            if anime.upper() in elem['title'].upper():
-                title = elem['title']
+            if anime.upper() in elem['title'].upper() and q in elem['title']:
+                eptitle = elem['title']
                 break
 
-        # find quality
-        ep_number = int(re.search(r'[HorribleSubs].+-\s(\d+)', title).group(1))
-        if q in title and minepisode <= ep_number <= maxepisode:
-            endpoint = r.find_all('td', class_='text-center')[0].find_all('a')[0]['href']
+        if eptitle is not None:
 
-            print(title, downloadurl.format(endpoint))
+            ep_number = int(re.search(r'[HorribleSubs].+-\s(\d+)', title).group(1))
+            if minepisode <= ep_number <= maxepisode:
+                endpoint = r.find_all('td', class_='text-center')[0].find_all('a')[0]['href']
 
-            torrent = requests.get(downloadurl.format(endpoint))
+                print(title, downloadurl.format(endpoint))
 
-            with open('downloaded/{}.torrent'.format(title), 'wb') as f:
-                f.write(torrent.content)
+                torrent = requests.get(downloadurl.format(endpoint))
+                with open('downloaded/{}.torrent'.format(title), 'wb') as f:
+                    f.write(torrent.content)
 
-            time.sleep(1)
+                time.sleep(1)
+        else:
+            print('Quality {} for {} not found'.format(q, title))
